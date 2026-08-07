@@ -7,7 +7,6 @@ Hệ thống giám sát và điều khiển nông nghiệp thông minh (Smart Fa
 - [Tính năng chính](#tính-năng-chính)
 - [Phần cứng sử dụng](#phần-cứng-sử-dụng)
 - [Công nghệ & Thư viện](#công-nghệ--thư-viện)
-- [Thành viên & Phân công công việc](#thành-viên--phân-công-công-việc)
 
 ---
 
@@ -72,21 +71,5 @@ Dự án được chia thành 3 phần chính tương ứng với các thư mụ
   - Thư viện kết nối Firebase, Telegram, WiFi.
 
 ---
-
-## 👥 Thành viên & Phân công công việc (Contributors)
-
-Dự án được hợp tác phát triển bởi:
-
-* **[Tên của bạn]** ([@username_github_cua_ban](https://github.com/))
-  * Xây dựng khối đọc cảm biến `ESP32_SENSOR`.
-  * Lập trình giao diện Web Dashboard `smartfarm.html`.
-  * Thiết kế giao diện HMI.
-
-* **[Tên bạn cùng nhóm]** ([@username_github_cua_ban_kia](https://github.com/))
-  * Lập trình khối `SmartFarm_HMI`.
-  * Tích hợp Firebase và Telegram Bot.
-  * Thiết kế và đấu nối phần cứng, thử nghiệm hệ thống.
-
-*(Lưu ý: Bạn có thể chỉnh sửa lại phần phân công công việc này cho đúng với thực tế nhóm của bạn)*
 
 > **📝 Ghi chú phát triển:** Dự án ban đầu được phát triển theo hình thức phân chia module độc lập và trao đổi file trực tiếp. Thư mục mã nguồn này được tổng hợp lại và đưa lên GitHub nhằm mục đích lưu trữ, quản lý phiên bản thống nhất và làm tài liệu tham khảo/portfolio.
