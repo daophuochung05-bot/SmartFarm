@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>LayerMaker Farm SCADA</title>
+<style>
+  :root {
+    --bg: #0b0c10;
+    --surface: #14161d;
+    --surface-card: #1d212a;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #f5f5f7;
+    --muted: #86868b;
+    --accent: #007aff;
+    --on: #34c759;
+    --off: #ff3b30;
+    --warn: #ff9f0a;
+    /* Màu riêng cho thông số */
+    --c-ph: #30D158; --c-tds: #BF5AF2; --c-lux: #FFD60A; 
+    --c-hum: #64D2FF; --c-air: #FF9F0A; --c-h2o: #5E5CE6;
+  }
+  
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { 
+    margin: 0; 
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif; 
+    background: var(--bg); 
+    color: var(--text); 
+    -webkit-font-smoothing: antialiased; 
+    display: flex; flex-direction: column; min-height: 100vh; 
+  }
+
+  /* --- HEADER --- */
+  header { 
+    background: rgba(20, 22, 29, 0.75); 
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    padding: 12px 20px; 
+    display: flex; justify-content: space-between; align-items: center; 
+    border-bottom: 1px solid var(--border); 
+    position: sticky; top: 0; z-index: 100; 
+  }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+  .status-badge { 
+    display: flex; align-items: center; gap: 6px; 
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    background: var(--surface-card); padding: 4px 10px; 
+    border-radius: 12px; border: 1px solid var(--border); 
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); transition: 0.3s; }
+  .dot.on { background: var(--on); box-shadow: 0 0 8px var(--on); }
+
+  /* --- MAIN & GRID --- */
+  main { padding: 20px; flex: 1; }
+  .device-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); 
+    gap: 20px; 
+  }
+
+  /* --- CARD --- */
+  .card { 
+    background: var(--surface-card); 
+    border: 1px solid var(--border); 
+    border-radius: 16px; 
+    padding: 16px; 
+    position: relative; 
+    transition: 0.3s ease; 
+  }
+  .card.on { border-color: rgba(52, 199, 89, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+  .card.offline { filter: grayscale(1) opacity(0.6); pointer-events: none; }
+  .card.alarm { animation: breatheAlarm 1.5s infinite alternate; }
+
+  @keyframes breatheAlarm {
+    0% { border-color: rgba(255, 59, 48, 0.3); box-shadow: 0 0 4px rgba(255,59,48,0.1); }
+    100% { border-color: rgba(255, 59, 48, 0.8); box-shadow: 0 0 16px rgba(255,59,48,0.4); }
+  }
+
+  .offline-banner { 
+    display: inline-block; margin-left: 8px; vertical-align: middle;
+    background: rgba(255,59,48,0.15); border: 1px solid var(--off); color: var(--off); 
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; 
+  }
+
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .title-group h2 { margin: 0 0 2px 0; font-size: 18px; font-weight: 600; }
+  .title-group p { margin: 0; color: var(--muted); font-size: 12px; font-family: monospace; }
+  .card-actions { display: flex; gap: 8px; pointer-events: auto; }
+  .icon-btn { 
+    background: var(--surface); border: 1px solid var(--border); color: var(--text); 
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; transition: 0.2s; 
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .icon-btn:hover { background: var(--border); }
+  .icon-btn.danger:hover { color: var(--off); border-color: var(--off); }
+
+  /* --- METERS GRID --- */
+  .meters-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; pointer-events: auto; }
+  .meter-box { 
+    background: var(--surface); border: 1px solid var(--border); 
+    border-radius: 16px; padding: 20px 12px 18px; text-align: center; 
+    cursor: pointer; transition: 0.2s; position: relative; min-height: 122px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .meter-box:hover { border-color: var(--muted); transform: translateY(-1px); }
+  .meter-box.alarm { border-color: var(--off); color: var(--off); animation: breatheMeter 1s infinite alternate; }
+  @keyframes breatheMeter { to { box-shadow: inset 0 0 10px rgba(255,59,48,0.3); } }
+  
+  .m-manbadge {
+    position: absolute; top: 4px; right: 4px;
+    min-width: 14px; height: 14px; padding: 0 3px;
+    border-radius: 50%;
+    background: var(--warn);
+    color: #1D1400;
+    font-size: 9px; font-weight: 700; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .m-name { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; letter-spacing: .4px; line-height: 1.3; }
+  .digit-val { font-size: 36px; font-weight: 700; letter-spacing: -1.2px; line-height: 1.15;
+               font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+  .digit-unit { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 4px; }
+
+  /* --- PUMP ROW --- */
+  .pump-row { 
+    background: var(--surface); border: 1px solid var(--border); 
+    border-radius: 12px; padding: 12px 16px; 
+    display: flex; justify-content: space-between; align-items: center; 
+    cursor: pointer; pointer-events: auto; transition: 0.2s;
+  }
+  .pump-row:hover { border-color: var(--muted); }
+  .pump-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .pump-status { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: var(--surface-card); border: 1px solid var(--border); color: var(--muted); }
+  .pump-status.on { background: rgba(0, 122, 255, 0.15); border-color: var(--accent); color: var(--accent); }
+
+  /* --- MODALS --- */
+  .backdrop { 
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); 
+    backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    display: none; justify-content: center; align-items: center; 
+    z-index: 999; padding: 16px; opacity: 0; transition: opacity 0.3s;
+  }
+  .backdrop.show { display: flex; opacity: 1; }
+  .modal { 
+    background: var(--surface-card); border: 1px solid var(--border); 
+    border-radius: 20px; width: 100%; max-width: 400px; 
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5); 
+    display: flex; flex-direction: column; overflow: hidden;
+    transform: translateY(20px) scale(0.95); transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .backdrop.show .modal { transform: translateY(0) scale(1); }
+  .modal.wide { max-width: 800px; }
+  
+  .modal-head { 
+    padding: 16px 20px; border-bottom: 1px solid var(--border); 
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--surface);
+  }
+  .modal-head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .btn-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 0; line-height: 1; }
+  
+  .modal-body { padding: 20px; overflow-y: auto; max-height: 80vh; }
+  .locked { pointer-events: none; opacity: 0.5; filter: grayscale(1); }
+  .locked-msg { display: none; color: var(--off); font-size: 12px; font-weight: 600; text-align: center; margin-bottom: 12px; }
+  .locked .locked-msg { display: block; }
+
+  /* --- LOGIN GATE ---
+     Che TOÀN màn hình mỗi lần mở web. Không lưu localStorage/sessionStorage
+     -> không "nhớ đăng nhập lần trước", đúng yêu cầu: mở web là phải nhập
+     lại. Mã lấy từ CHÍNH màn hình cảm ứng thiết bị (Settings > Pairing Code),
+     dùng đúng 1 lần rồi "đốt" (xem FarmAuth.h phía firmware). */
+  .login-gate {
+    position: fixed; inset: 0; z-index: 2000;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .login-card {
+    background: var(--surface-card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 28px 24px; width: 100%; max-width: 340px;
+    text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .login-card h2 { margin: 0 0 6px; font-size: 19px; font-weight: 600; }
+  .login-card p { margin: 0 0 20px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .login-code-input {
+    width: 100%; text-align: center; font-size: 26px; font-weight: 700;
+    letter-spacing: 6px; font-family: ui-monospace, monospace;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 12px; padding: 14px; outline: none; margin-bottom: 14px;
+    box-sizing: border-box;
+  }
+  .login-code-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,122,255,.18); }
+  .login-btn {
+    width: 100%; background: var(--accent); color: #fff; border: none;
+    border-radius: 12px; padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .login-btn:disabled { opacity: .6; cursor: default; }
+  .login-err { display: none; color: var(--off); font-size: 12px; font-weight: 600; margin-top: 12px; }
+
+  /* --- CONTROL CARDS --- */
+  .control-card { 
+    background: var(--surface); border: 1px solid var(--border); 
+    border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+  }
+  .control-row { 
+    display: flex; justify-content: space-between; align-items: center; 
+    padding: 14px 16px; border-bottom: 1px solid var(--border); 
+  }
+  .control-row:last-child { border-bottom: none; }
+  .cr-label { font-size: 14px; font-weight: 500; }
+  .cr-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  
+  /* --- IOS SWITCH --- */
+  .ios-switch { 
+    position: relative; width: 44px; height: 24px; appearance: none; -webkit-appearance: none;
+    background: rgba(255,255,255,0.1); border-radius: 12px; outline: none; 
+    cursor: pointer; transition: 0.3s; margin: 0;
+  }
+  .ios-switch::after { 
+    content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; 
+    background: #fff; border-radius: 50%; transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .ios-switch:checked { background: var(--on); }
+  .ios-switch:checked::after { transform: translateX(20px); }
+  .ios-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* IOS Input */
+  .ios-input { 
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 14px; border-radius: 10px; width: 120px; text-align: right;
+    font-size: 17px; font-weight: 600; outline: none; font-family: monospace;
+    font-variant-numeric: tabular-nums; transition: .15s;
+  }
+  .ios-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,122,255,.18); }
+  /* O nguong DANG SUA nhung CHUA Enter -> vien cam */
+  .ios-input.dirty { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(255,159,10,.18); }
+  /* Bo mui ten spinner: no de len so, xau va de bam nham */
+  .ios-input[type=number]::-webkit-outer-spin-button,
+  .ios-input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .ios-input[type=number] { -moz-appearance: textfield; }
+  .input-full { width: 100%; text-align: left; }
+
+  /* Flex Layout cho Modal Wide */
+  .p-cols { display: flex; gap: 20px; }
+  .p-col-left { flex: 0 0 320px; }
+  .p-col-right { flex: 1; display: flex; flex-direction: column; }
+  @media (max-width: 768px) { .p-cols { flex-direction: column; } .p-col-left { flex: auto; } }
+
+  /* Segmented Control (Tabs) */
+  .segmented-control { 
+    display: flex; background: var(--surface); padding: 3px; 
+    border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border);
+  }
+  .segment { 
+    flex: 1; text-align: center; padding: 6px 0; border-radius: 6px; 
+    cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; transition: 0.2s;
+  }
+  .segment.active { background: var(--surface-card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+  /* Chart */
+  .chart-wrap { height: 280px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); position: relative; padding: 12px; flex: 1; }
+  .chart-status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .chart-status.show { display: flex; }
+</style>
+</head>
+<body>
+
+<!-- TELEGRAM CHAT ID GATE — che toàn màn hình tới khi biết Chat ID. Nhập 1
+     LẦN, web tự tính ra room (SHA256, khớp farmDeriveRoom() bên ESP), trình
+     duyệt tự nhớ (localStorage) cho các lần mở sau — không còn OTP, không
+     còn "User Key" gõ tay. -->
+<div class="login-gate" id="loginGate">
+  <div class="login-card">
+    <h2>🔑 Nhập Telegram Chat ID</h2>
+    <p>Nhập ĐÚNG Telegram Chat ID đã cài trên thiết bị (Cài đặt > Telegram ID
+       trên màn hình ESP). Web sẽ tự tính ra đúng "phòng" của bạn — khớp
+       chính xác với thiết bị đã dùng cùng Chat ID này, không lẫn với người
+       khác. Trình duyệt sẽ tự nhớ cho những lần mở sau.</p>
+    <input class="login-code-input" id="userKeyInput" maxlength="24"
+           placeholder="Ví dụ: 123456789" autocomplete="off" inputmode="numeric"
+           onkeydown="if(event.key==='Enter') attemptChatId();" />
+    <button class="login-btn" id="userKeyBtn" onclick="attemptChatId()">Vào</button>
+    <div class="login-err" id="userKeyErr"></div>
+  </div>
+</div>
+
+<header>
+  <h1>LayerMaker SCADA</h1>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div class="status-badge">
+      <span class="dot" id="connDot"></span>
+      <span id="connTxt">Đang kết nối...</span>
+    </div>
+    <button class="icon-btn" onclick="changeChatId()" title="Đổi Telegram Chat ID">🔑</button>
+  </div>
+</header>
+
+<main><div class="device-grid" id="grid"></div></main>
+
+<!-- Modal Đổi tên -->
+<div class="backdrop" id="editModal" onclick="closeModal(event, 'editModal')">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Thiết lập Thiết bị</h3>
+      <button class="btn-close" onclick="forceCloseModal('editModal')">×</button>
+    </div>
+    <div class="modal-body" id="editModalBody">
+      <div class="locked-msg">Thiết bị đang offline. Không thể sửa.</div>
+      <div class="control-card">
+        <div class="control-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+          <div class="cr-label">Mã thiết bị (MAC)</div>
+          <input class="ios-input input-full" id="fId" disabled style="color:var(--muted); background:var(--surface);" />
+        </div>
+        <div class="control-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+          <div class="cr-label">Tên hiển thị</div>
+          <input class="ios-input input-full" id="fName" />
+        </div>
+        <div class="control-row">
+          <div>
+            <div class="cr-label">Nguồn tín hiệu</div>
+            <div class="cr-desc" id="fLinkDesc">ESP-NOW — cảm biến thật</div>
+          </div>
+          <input type="checkbox" class="ios-switch" id="fLinkSw" onchange="toggleLink()">
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <button style="background: var(--accent); color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;" onclick="saveDevice()">Lưu Tên</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Bơm -->
+<div class="backdrop" id="pumpModal" onclick="closeModal(event, 'pumpModal')">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 style="color: var(--accent);">🌊 Bơm Tuần Hoàn</h3>
+      <button class="btn-close" onclick="forceCloseModal('pumpModal')">×</button>
+    </div>
+    <div class="modal-body" id="pumpModalBody">
+      <div class="locked-msg">Thiết bị đang offline. Không thể điều khiển.</div>
+      <div class="control-card">
+        <div class="control-row">
+          <div>
+            <div class="cr-label">Công tắc Bơm</div>
+            <div class="cr-desc">Bật/Tắt bơm tuần hoàn</div>
+          </div>
+          <input type="checkbox" class="ios-switch" id="pumpOnOffSw" onchange="togglePumpSw()">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Thông Số (Chart + Limit) -->
+<div class="backdrop" id="paramModal" onclick="closeModal(event, 'paramModal')">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3 id="pTitle">Chi tiết Thông số</h3>
+      <button class="btn-close" onclick="forceCloseModal('paramModal')">×</button>
+    </div>
+    <div class="modal-body" id="paramModalBody">
+      <div class="locked-msg">Thiết bị đang offline. Chế độ chỉ xem.</div>
+      <div class="p-cols">
+        <div class="p-col-left">
+          <div class="control-card">
+            <div class="control-row">
+              <div class="cr-label">Ngưỡng Trên (Hi)</div>
+              <input type="number" step="0.1" class="ios-input" id="pHi"
+                     oninput="markDirty('pHi')" onkeydown="limitKey(event,'pHi')" onblur="limitBlur('pHi')">
+            </div>
+            <div class="control-row">
+              <div class="cr-label">Ngưỡng Dưới (Lo)</div>
+              <input type="number" step="0.1" class="ios-input" id="pLo"
+                     oninput="markDirty('pLo')" onkeydown="limitKey(event,'pLo')" onblur="limitBlur('pLo')">
+            </div>
+            <div class="cr-desc" id="pRangeHint" style="padding:2px 4px 4px; font-size:11px; opacity:.7;"></div>
+          </div>
+
+          <div class="control-card">
+            <div class="control-row">
+              <div>
+                <div class="cr-label">Chế độ Thủ Công</div>
+                <div class="cr-desc">Khóa tự động bơm vi chất</div>
+              </div>
+              <input type="checkbox" class="ios-switch" id="pManSw" onchange="toggleParamMan()">
+            </div>
+            <div class="control-row">
+              <div class="cr-label">Bơm Tăng (+)</div>
+              <input type="checkbox" class="ios-switch" id="pSw1" onchange="toggleParamSw(1)">
+            </div>
+            <div class="control-row">
+              <div class="cr-label">Bơm Giảm (−)</div>
+              <input type="checkbox" class="ios-switch" id="pSw2" onchange="toggleParamSw(2)">
+            </div>
+          </div>
+        </div>
+        
+        <div class="p-col-right">
+          <div class="segmented-control" id="rangeTabs">
+            <div class="segment active" data-range="live">Realtime</div>
+            <div class="segment" data-range="hour">1 Giờ</div>
+            <div class="segment" data-range="day">24 Giờ</div>
+            <div class="segment" data-range="month">30 Ngày</div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="pChart"></canvas>
+            <div id="pChartStatus" class="chart-status"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<script>
+/* =============================================================
+ * LayerMaker Farm — SCADA Dashboard (Apple Dark Style)
+ * Giao thức: MQTT theo MAC efuse. Không Firebase.
+ * ============================================================= */
+const CFG = {
+  BROKER:     "wss://broker.hivemq.com:8884/mqtt",
+  // TOPIC_BASE KHÔNG còn dùng thẳng để subscribe/publish — phải chèn thêm
+  // userKey vào giữa (xem hàm TB() bên dưới). Để trần thế này, ai mở web
+  // cũng thấy TẤT CẢ thiết bị của TẤT CẢ người dùng (bug cũ đã sửa).
+  TOPIC_BASE: "LayerMaker/SmartFarm/farm",
+  USERKEY_KEY: "smartfarm_userkey",   // localStorage key lưu room ĐÃ TÍNH (hash)
+  TGCHAT_KEY:  "smartfarm_tgchat",    // localStorage key lưu Telegram Chat ID người dùng gõ
+  STALE_MS:   9000,                 
+  HIST_KEY:   "smartfarm_hist_v2",  
+  HIST_CAP:   1500,                 
+  HIST_MAX_AGE: 32 * 86400 * 1000   
+};
+
+// PHẢI TRÙNG KHỚP 100% với FARM_ROOM_SALT trong FarmRoom.h bên ESP. Đổi 1
+// bên mà quên đổi bên kia -> web và ESP tính ra 2 room KHÁC NHAU -> web
+// nhập đúng Chat ID vẫn không thấy thiết bị đâu (như "mất tích"), tưởng lỗi
+// mạng nhưng thực ra là salt lệch nhau. Đổi thì đổi ở CẢ 2 nơi cùng lúc.
+const FARM_ROOM_SALT = "MacomVn-Y2K-LayerMakerFarm-DOI-CHUOI-NAY-2026";
+
+// Suy ra room (40 ký tự hex, 160-bit) từ Telegram Chat ID — CÙNG công thức
+// với farmDeriveRoom() trong FarmRoom.h: SHA-256("salt:chatId"), lấy 20/32
+// byte đầu. Dùng Web Crypto API (crypto.subtle) có sẵn trên mọi trình duyệt
+// hiện đại chạy HTTPS (hoặc localhost/file://) — không cần thư viện ngoài.
+async function deriveRoom(chatId) {
+  const input  = `${FARM_ROOM_SALT}:${chatId}`;
+  const bytes  = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const first20 = new Uint8Array(digest).slice(0, 20);
+  return Array.from(first20).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Mã người dùng đang dùng cho phiên này (null = chưa nhập). Đọc từ
+// localStorage nếu đã có -> khỏi bắt nhập lại mỗi lần mở web.
+let userKey = localStorage.getItem(CFG.USERKEY_KEY) || null;
+
+// Dọn dữ liệu cũ: bản trước cho gõ tay "User Key" tuỳ ý (không phải hash),
+// giờ userKey PHẢI là chuỗi hex 40 ký tự do deriveRoom() sinh ra. Nếu thấy
+// giá trị cũ không đúng khuôn dạng đó -> xoá, bắt nhập lại Chat ID để tính
+// đúng room mới, tránh web lặng lẽ subscribe nhầm room rỗng/sai.
+if (userKey && !/^[0-9a-f]{40}$/i.test(userKey)) {
+  userKey = null;
+  try { localStorage.removeItem(CFG.USERKEY_KEY); } catch(e){}
+}
+
+// Topic base ĐẦY ĐỦ, ĐÃ CHÈN userKey — dùng hàm này ở MỌI CHỖ subscribe/
+// publish, không dùng thẳng CFG.TOPIC_BASE nữa.
+const TB = () => `${CFG.TOPIC_BASE}/${userKey}`;
+
+const PARAM_KEYS = ['ph','tds','lux','hum','air','h2o'];
+const colors = { ph:'var(--c-ph)', tds:'var(--c-tds)', lux:'var(--c-lux)', hum:'var(--c-hum)', air:'var(--c-air)', h2o:'var(--c-h2o)' };
+const getColor = k => colors[String(k).toLowerCase()] || 'var(--muted)';
+
+/* Canvas KHÔNG hiểu "var(--c-ph)". CSS var chỉ sống trong CSS; đưa vào
+   ctx.createLinearGradient().addColorStop() là NÉM LỖI ngay -> drawChart chết
+   giữa chừng -> biểu đồ không bao giờ hiện. (Chart.js thì nuốt im lặng nên
+   trước đây không ai phát hiện.) Phải hỏi trình duyệt lấy mã hex thật. */
+const _hexCache = {};
+function getColorHex(k){
+  const key = String(k).toLowerCase();
+  if(_hexCache[key]) return _hexCache[key];
+  const raw = getColor(key);
+  const m = raw.match(/var\((--[\w-]+)\)/);
+  let hex = raw;
+  if(m){
+    hex = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
+  }
+  if(!/^#[0-9a-f]{3,8}$/i.test(hex)) hex = '#8E8E93';   // hỏng -> xám, đừng để nổ
+  _hexCache[key] = hex;
+  return hex;
+}
+
+/* DẢI VẬT LÝ — PHẢI KHỚP TUYỆT ĐỐI với PHYS_MIN/PHYS_MAX trong ui.h.
+   Web chỉ chặn cho ĐỠ PHIỀN người dùng; ESP mới là bên chặn THẬT (nó kẹp lại
+   lần nữa khi nhận lệnh). Sửa 1 bên mà quên bên kia thì web hiện 1 đằng, ESP
+   lưu 1 nẻo — nhớ sửa CẢ HAI. */
+const PHYS = {
+  ph:  { min: 0,  max: 14,    step: 0.1 },
+  tds: { min: 0,  max: 1000,  step: 10  },
+  lux: { min: 0,  max: 65535, step: 50  },
+  hum: { min: 0,  max: 100,   step: 1   },
+  air: { min: 0,  max: 100,   step: 0.5 },
+  h2o: { min: 0,  max: 100,   step: 0.5 },
+};
+const clampPhys = (k, v) => {
+  const r = PHYS[String(k).toLowerCase()];
+  if(!r || isNaN(v)) return v;
+  return Math.min(r.max, Math.max(r.min, v));
+};
+const num = x => (isNaN(x) || x===null || x==='') ? null : Number(x);
+
+/* SO LE HIEN THI - so tho 511.6671 ppm nhin nhu rac. Cat gon cho sach mat.
+   pH DE 1 SO LE, khong lam tron ve so nguyen: pH 6 voi pH 6.4 la hai the gioi
+   khac nhau voi cay. Muon so nguyen that thi doi ph: 0. */
+const DEC = { ph: 1, tds: 0, lux: 0, hum: 0, air: 1, h2o: 1 };
+const fmtVal = (k, v) => (v === null || v === undefined || isNaN(v))
+  ? '--'
+  : Number(v).toFixed(DEC[String(k).toLowerCase()] ?? 1);
+
+// MAC -> Device Object
+const devices = new Map();
+let mqttClient = null;
+
+let curMac = null, curKey = null, curRange = 'live', pChart = null;
+
+// Khóa chống nháy ngược (1.2s)
+const _pending = {}, PENDING_MS = 1200;
+const pk = (field) => `${curMac}_${curKey}_${field}`;
+function markPending(field, val){ _pending[pk(field)] = { val, until: Date.now()+PENDING_MS }; }
+function resolvePending(field, remote, cur){
+  const p = _pending[pk(field)];
+  if(p){
+    if(remote === p.val){ delete _pending[pk(field)]; return remote; }
+    if(Date.now() < p.until) return cur;
+    delete _pending[pk(field)];
+  }
+  return remote;
+}
+
+/* ============================================================================
+   KHO LỊCH SỬ — FIREBASE REALTIME DATABASE
+   ---------------------------------------------------------------------------
+   ESP32 tự đẩy 1 dòng / 60 giây lên Firebase (xem FarmHistory.h). Web CHỈ ĐỌC.
+   Nhờ vậy: MÁY NÀO MỞ WEB CŨNG THẤY ĐỦ LỊCH SỬ, không cần tab nào mở sẵn,
+   không phụ thuộc localStorage/IndexedDB của một cái máy cụ thể.
+
+   >>> ĐIỀN HOST FIREBASE VÀO CFG.FB_HOST BÊN DƯỚI — PHẢI KHỚP Y HỆT
+   >>> FB_HOST trong ThuyCanhThongMinh.ino. Sai 1 ký tự là biểu đồ trống trơn.
+============================================================================ */
+const FB = {
+  HOST:   "smartfarm-95908-default-rtdb.asia-southeast1.firebasedatabase.app",
+  SECRET: "",   // để "" nếu rules đang mở
+};
+
+// Đọc lịch sử 1 thiết bị từ mốc thời gian (epoch giây) tới nay.
+// Cần rule ".indexOn": "t" bên Firebase, nếu không sẽ bị từ chối.
+async function fbQuery(mac, fromSec){
+  if(!FB.HOST) return null;                       // chưa cấu hình
+  // /farm/<userKey>/<mac>/h.json — PHẢI khớp path FarmHistory.cpp dựng ở ESP.
+  let url = `https://${FB.HOST}/farm/${userKey}/${mac}/h.json`
+          + `?orderBy=%22t%22&startAt=${fromSec}&limitToLast=3000`;
+  if(FB.SECRET) url += `&auth=${FB.SECRET}`;
+  try{
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const obj = await r.json();
+    if(!obj) return [];
+    // Firebase trả object {pushId: row} -> đổi thành mảng, sắp theo thời gian
+    return Object.values(obj).sort((a,b) => a.t - b.t);
+  }catch(e){
+    console.warn('Firebase đọc lỗi:', e);
+    return null;                                  // null = LỖI (khác [] = rỗng)
+  }
+}
+
+// Xuất CSV từ dữ liệu Firebase — Excel mở thẳng
+window.exportCSV = async (mac) => {
+  const rows = await fbQuery(mac, 0);
+  if(rows === null){ alert('Không đọc được Firebase. Kiểm tra FB.HOST và rules.'); return; }
+  if(!rows.length){ alert('Firebase chưa có dữ liệu nào cho thiết bị này.'); return; }
+  const head = ['time', ...PARAM_KEYS].join(',');
+  const body = rows.map(r =>
+    [new Date(r.t*1000).toISOString(), ...PARAM_KEYS.map(k => r[k] !== undefined ? r[k] : '')].join(',')
+  ).join('\n');
+  const blob = new Blob(['\ufeff' + head + '\n' + body], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `farm_${mac}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// LocalStorage — CHỈ giữ danh sách thiết bị + trạng thái cuối. Lịch sử nằm
+// trên Firebase, tuyệt đối không nhét vào đây.
+// Key CÓ userKey trong đó -> đổi mã người dùng trên CÙNG trình duyệt không
+// bị lẫn/lòi ra danh sách thiết bị của người dùng trước.
+const histCacheKey = () => `${CFG.HIST_KEY}_${userKey}`;
+function loadCache(){
+  try{
+    const arr = JSON.parse(localStorage.getItem(histCacheKey()) || "[]");
+    arr.forEach(d => { d.on=false; d.lastRcv=0; d.hist=d.hist||{}; devices.set(d.mac, d); });
+  }catch(e){}
+}
+let _saveTm=0;
+function saveCache(){
+  const now=Date.now();
+  if(now-_saveTm < 4000) return;
+  _saveTm=now;
+  // Bỏ trường hist nặng trước khi lưu — lịch sử nằm trên Firebase.
+  const slim = Array.from(devices.values()).map(d => ({ ...d, hist: undefined }));
+  try{ localStorage.setItem(histCacheKey(), JSON.stringify(slim)); }catch(e){}
+}
+
+// MQTT
+function connectMQTT(){
+  setConn(false, 'Đang kết nối...');
+  mqttClient = mqtt.connect(CFG.BROKER, {
+    clientId: 'web_' + Math.random().toString(16).slice(2),
+    keepalive: 30, reconnectPeriod: 2000, connectTimeout: 8000, clean: true
+  });
+
+  mqttClient.on('connect', () => {
+    setConn(true, 'Đã kết nối Broker');
+    // Subscribe THEO NAMESPACE userKey — không còn wildcard toàn cục, nên
+    // chỉ nhận đúng thiết bị đã dùng cùng mã người dùng này.
+    mqttClient.subscribe(TB() + '/+/status');
+    mqttClient.subscribe(TB() + '/+/full');
+    mqttClient.subscribe(TB() + '/+/ack');
+  });
+  mqttClient.on('reconnect', () => setConn(false, 'Đang nối lại...'));
+  mqttClient.on('error',     e => setConn(false, 'Lỗi mạng'));
+  mqttClient.on('offline',   () => setConn(false, 'Mất kết nối'));
+
+  mqttClient.on('message', (topic, payload) => {
+    let data; try { data = JSON.parse(payload.toString()); } catch(e){ return; }
+    const mac = topic.split('/').slice(-2,-1)[0];
+    if(!mac) return;
+
+    let d = devices.get(mac) || { mac, id:mac, on:false, full:null, hist:{} };
+    if(!d.hist) d.hist = {};
+
+    if(topic.endsWith('/status')){
+      d.on = data.on === true;
+      if(data.id) d.id = data.id;
+      if(data.ip) d.ip = data.ip;
+      if(data.ver) d.ver = data.ver;
+      d.lastRcv = Date.now();
+    } else if(topic.endsWith('/full')){
+      d.full = data;
+      if(data.id) d.id = data.id;
+      d.lastRcv = Date.now();
+      pushHistory(d, data);
+    }
+
+    devices.set(mac, d);
+    saveCache();
+    render();
+    if(curMac === mac){ refreshParamModalLive(); refreshPumpModalLive(); }
+  });
+}
+
+function setConn(ok, txt){
+  document.getElementById('connDot').className = ok ? 'dot on' : 'dot';
+  document.getElementById('connTxt').textContent = txt;
+}
+
+// ---- GATE MÃ NGƯỜI DÙNG ----
+// Biết đúng userKey = coi như "đăng nhập" (khớp việc broker/Firebase cũng
+// chỉ mở theo namespace này). Không còn OTP riêng cho web — Tony xác nhận
+// bỏ hẳn, chỉ giữ OTP bên Telegram (FarmAuth) cho việc ghép Chat ID.
+function userKeyError(msg){
+  const el = document.getElementById('userKeyErr');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideUserKeyGate(){
+  document.getElementById('loginGate').style.display = 'none';
+}
+
+// Gọi lúc app khởi động HOẶC sau khi người dùng vừa nhập mã xong.
+function startApp(){
+  hideUserKeyGate();
+  loadCache();
+  render();
+  connectMQTT();
+}
+
+window.attemptChatId = async () => {
+  const val = (document.getElementById('userKeyInput').value || '').trim();
+  document.getElementById('userKeyErr').style.display = 'none';
+  if(!val){ userKeyError('Nhập Telegram Chat ID của bạn.'); return; }
+
+  if(!window.crypto || !window.crypto.subtle){
+    // crypto.subtle chỉ có trên ngữ cảnh an toàn (HTTPS/localhost/file://).
+    // Mở qua http:// thường (không phải localhost) sẽ thiếu API này.
+    userKeyError('Trình duyệt/kết nối này không hỗ trợ tính mã (cần mở qua HTTPS).');
+    return;
+  }
+
+  try {
+    userKey = await deriveRoom(val);
+    try{ localStorage.setItem(CFG.TGCHAT_KEY, val); }catch(e){}
+    try{ localStorage.setItem(CFG.USERKEY_KEY, userKey); }catch(e){}
+    startApp();
+  } catch(e) {
+    userKeyError('Không tính được mã, thử lại.');
+  }
+};
+
+// Đổi Chat ID: xoá room đã nhớ, ngắt kết nối cũ, xoá danh sách thiết bị
+// đang hiện (thuộc room CŨ), mở lại màn hình nhập. Điền sẵn Chat ID lần
+// trước cho đỡ gõ lại (đa số chỉ đổi vì gõ nhầm, không đổi hẳn sang người
+// khác). Dùng khi đưa máy cho người khác, hoặc gõ nhầm Chat ID lúc đầu.
+window.changeChatId = () => {
+  if(mqttClient){ try{ mqttClient.end(true); }catch(e){} mqttClient = null; }
+  devices.clear();
+  render();
+  try{ localStorage.removeItem(CFG.USERKEY_KEY); }catch(e){}
+  userKey = null;
+  document.getElementById('userKeyInput').value = localStorage.getItem(CFG.TGCHAT_KEY) || '';
+  document.getElementById('loginGate').style.display = 'flex';
+};
+
+function sendCmd(mac, obj){
+  if(!mqttClient || !mqttClient.connected){ console.warn('Mất kết nối!'); return; }
+  mqttClient.publish(`${TB()}/${mac}/cmd`, JSON.stringify(obj), { qos:1 });
+}
+
+const isOnline = d => d.on && (Date.now() - (d.lastRcv||0) < CFG.STALE_MS);
+
+// Live: MQTT về -> nếu đang xem tab Realtime thì chấm thêm 1 điểm.
+// Web KHÔNG còn ghi lịch sử nữa — ESP32 lo việc đó (đẩy thẳng lên Firebase).
+function pushHistory(d, full){
+  const params = (full && full.params) || {};
+  if(!pChart || curMac !== d.mac || curRange !== 'live') return;
+  const v = params[curKey] ? num(params[curKey].value) : null;
+  if(v === null) return;
+  pChart.data.datasets[0].data.push({ x: Date.now(), y: v });
+  pruneChart();
+  const lim = currentLimits();                      // ngưỡng có thể vừa đổi
+  pChart.$limits = { lo: Number(lim.lo), hi: Number(lim.hi) };
+  pChart.update('none');
+}
+
+// Render Grid
+function render(){
+  const grid = document.getElementById('grid');
+  const list = Array.from(devices.values()).sort((a,b) => String(a.id||'').localeCompare(String(b.id||'')));
+  if(!list.length){
+    grid.innerHTML = `<div style="text-align:center;width:100%;color:var(--muted);grid-column:1/-1;">Đang quét thiết bị trên broker...</div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(d => {
+    const online = isOnline(d);
+    const f = d.full || {};
+    const params = f.params || {};
+    const pump = f.pump || { sw:false };
+    let widgets = '', anyAlarm = false;
+
+    PARAM_KEYS.forEach(k => {
+      const p = params[k] || { name: k.toUpperCase(), unit: '' };
+      const v = num(p.value), c = getColor(k);
+      let alrm = false;
+      if(online && v!==null && p.lo!==undefined && p.hi!==undefined && (v<p.lo || v>p.hi)){ alrm=true; anyAlarm=true; }
+      widgets += `
+      <div class="meter-box ${alrm?'alarm':''}" onclick="openParam('${d.mac}','${k}')">
+        ${p.man?'<div class="m-manbadge">M</div>':''}
+        <div class="m-name">${String(p.name).toUpperCase()}</div>
+        <div class="digit-val" style="color:${alrm?'var(--off)':c}">${fmtVal(k, v)}</div>
+        <div class="digit-unit">${p.unit||''}</div>
+      </div>`;
+    });
+
+    return `
+    <div class="card ${anyAlarm?'alarm':''} ${!online?'offline':''} ${online?'on':''}">
+      <div class="card-head">
+        <div class="title-group">
+          <h2>${d.id||d.mac}${!online?`<span class="offline-banner">OFFLINE</span>`:''}</h2>
+          <p>MAC: ${d.mac}${d.ip?' • '+d.ip:''}</p>
+        </div>
+        ${online?`<div class="card-actions">
+          <button class="icon-btn" onclick="exportCSV('${d.mac}')" title="Tải CSV lịch sử">⭳</button>
+          <button class="icon-btn" onclick="openEdit('${d.mac}')">✎</button>
+          <button class="icon-btn danger" onclick="quickDel('${d.mac}')">🗑</button>
+        </div>`:''}
+      </div>
+      <div class="meters-grid">${widgets}</div>
+      <div class="pump-row" onclick="openPump('${d.mac}')">
+        <div class="pump-title" style="color:var(--accent);">🌊 Bơm Tuần Hoàn</div>
+        <div class="pump-status ${pump.sw?'on':''}">${pump.sw?'ON':'OFF'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Actions
+window.quickDel = mac => {
+  if(!confirm(`Xóa thiết bị ${mac} khỏi danh sách?`)) return;
+  if(mqttClient && mqttClient.connected){
+    mqttClient.publish(`${TB()}/${mac}/status`, '', { retain:true });
+    mqttClient.publish(`${TB()}/${mac}/full`,   '', { retain:true });
+  }
+  devices.delete(mac); saveCache(); render();
+};
+
+// Modals Base
+window.closeModal = (e, id) => { if(e.target.id === id) forceCloseModal(id); }
+window.forceCloseModal = (id) => {
+  document.getElementById(id).classList.remove('show');
+  if(id==='paramModal'){ clearTimeout(_chartTm); if(pChart){ pChart.destroy(); pChart=null; } }
+}
+function applyModalLockState(id, online) {
+  const body = document.getElementById(id + 'Body');
+  if(body) body.classList.toggle('locked', !online);
+}
+
+// Edit Modal
+window.openEdit = mac => {
+  const d = devices.get(mac)||{};
+  curMac = mac;
+  document.getElementById('fId').value = mac;
+  document.getElementById('fName').value = d.id||'';
+
+  const sim = Number(((d.full)||{}).link) === 1;
+  document.getElementById('fLinkSw').checked = sim;
+  document.getElementById('fLinkDesc').textContent =
+    sim ? 'MÔ PHỎNG — ESP tự sinh số' : 'UART2 — cảm biến thật';
+  applyModalLockState('editModal', isOnline(d));
+  document.getElementById('editModal').classList.add('show');
+};
+window.toggleLink = () => {
+  const sim = document.getElementById('fLinkSw').checked;
+  document.getElementById('fLinkDesc').textContent =
+    sim ? 'MÔ PHỎNG — ESP tự sinh số' : 'UART2 — cảm biến thật';
+  sendCmd(document.getElementById('fId').value, { cmd:'set_link', mode: sim ? 1 : 0 });
+};
+
+window.saveDevice = () => {
+  const mac = document.getElementById('fId').value;
+  const name = document.getElementById('fName').value.trim();
+  if(name) sendCmd(mac, { cmd:'set_name', name });
+  forceCloseModal('editModal');
+};
+
+// Pump Modal (chỉ Bật/Tắt, không còn auto/manual)
+let pSw = false;
+window.openPump = mac => {
+  curMac = mac; curKey = 'pump';
+  applyModalLockState('pumpModal', isOnline(devices.get(mac)));
+  document.getElementById('pumpModal').classList.add('show');
+  refreshPumpModalLive();
+};
+function refreshPumpModalLive(){
+  if(!document.getElementById('pumpModal').classList.contains('show')) return;
+  const pump = ((devices.get(curMac)||{}).full||{}).pump || {};
+  pSw = resolvePending('sw', !!pump.sw, pSw);
+  document.getElementById('pumpOnOffSw').checked = pSw;
+}
+window.togglePumpSw = () => {
+  pSw = document.getElementById('pumpOnOffSw').checked;
+  markPending('sw', pSw); refreshPumpModalLive();
+  sendCmd(curMac, { cmd:'set_pump', sw:pSw });
+};
+
+// Param Modal
+let mMan = false, mSw1 = false, mSw2 = false, _limitTm = null;
+window.openParam = (mac, k) => {
+  curMac = mac; curKey = k;
+  ['pLo','pHi'].forEach(id => document.getElementById(id).classList.remove('dirty'));
+  // Mở lên là vào Realtime — thấy số nhúc nhích ngay, khỏi tưởng hệ thống chết
+  document.querySelectorAll('#rangeTabs .segment').forEach(el =>
+    el.classList.toggle('active', el.dataset.range === 'live'));
+  curRange = 'live';
+  applyModalLockState('paramModal', isOnline(devices.get(mac)));
+  document.getElementById('paramModal').classList.add('show');
+  loadChartRange(curRange);
+  refreshParamModalLive();
+};
+function refreshParamModalLive(){
+  if(!document.getElementById('paramModal').classList.contains('show')) return;
+  const p = (((devices.get(curMac)||{}).full||{}).params||{})[curKey] || {};
+  document.getElementById('pTitle').textContent = `Chi tiết: ${String(p.name||curKey).toUpperCase()}`;
+
+  const lo=document.getElementById('pLo'), hi=document.getElementById('pHi');
+
+  // Ép dải vật lý ngay trên ô nhập: trình duyệt tự chặn mũi tên lên/xuống,
+  // còn gõ tay bậy thì clampPhys() bên dưới kéo về.
+  const r = PHYS[String(curKey).toLowerCase()];
+  const hint = document.getElementById('pRangeHint');
+  if(r){
+    [lo,hi].forEach(el => { el.min=r.min; el.max=r.max; el.step=r.step; });
+    hint.textContent = `Cho phép: ${r.min} – ${r.max} ${p.unit||''}`;
+  } else { hint.textContent = ''; }
+
+  // KHONG dung o dang go do (dirty) - neu khong thi so tu ESP de len o dang go.
+  if(!lo.classList.contains('dirty') && document.activeElement!==lo && p.lo!==undefined) lo.value = p.lo;
+  if(!hi.classList.contains('dirty') && document.activeElement!==hi && p.hi!==undefined) hi.value = p.hi;
+
+  mMan = resolvePending('man', !!p.man, mMan);
+  mSw1 = resolvePending('sw1', !!p.sw1, mSw1);
+  mSw2 = resolvePending('sw2', !!p.sw2, mSw2);
+
+  document.getElementById('pManSw').checked = mMan;
+  const s1=document.getElementById('pSw1'), s2=document.getElementById('pSw2');
+  s1.disabled = !mMan; s2.disabled = !mMan;
+  s1.checked = mSw1; s2.checked = mSw2;
+}
+
+/* ---- NGUONG: PHAI BAM ENTER MOI GUI --------------------------------------
+   Truoc day go toi dau ban lenh toi do -> vua go "8" (dinh go 800) la ESP da
+   nhan 8, kep lai, roi day nguoc ve ghi de o dang go -> con tro nhay lung tung.
+   Gio: go thoai mai, Enter moi gui. Bam ra ngoai (blur) = HUY, tra ve so cu. */
+window.markDirty = (id) => document.getElementById(id).classList.add('dirty');
+
+function currentLimits(){
+  const p = (((devices.get(curMac)||{}).full||{}).params||{})[curKey] || {};
+  return { lo: p.lo, hi: p.hi };
+}
+
+function revertLimit(id){
+  const cur = currentLimits();
+  const el = document.getElementById(id);
+  const v = (id === 'pLo') ? cur.lo : cur.hi;
+  if(v !== undefined) el.value = v;
+  el.classList.remove('dirty');
+}
+
+window.limitBlur = (id) => { if(document.getElementById(id).classList.contains('dirty')) revertLimit(id); };
+
+window.limitKey = (e, id) => {
+  if(e.key === 'Escape') { revertLimit(id); e.target.blur(); return; }
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+
+  const eLo=document.getElementById('pLo'), eHi=document.getElementById('pHi');
+  let lo = parseFloat(eLo.value), hi = parseFloat(eHi.value);
+  if(isNaN(lo) || isNaN(hi)) { revertLimit(id); return; }
+
+  lo = clampPhys(curKey, lo);
+  hi = clampPhys(curKey, hi);
+  if(lo > hi){                        // dao nguoc -> nhay do canh bao, khong gui
+    const hint = document.getElementById('pRangeHint');
+    hint.style.color = 'var(--off)';
+    setTimeout(() => { hint.style.color = ''; }, 1200);
+    return;
+  }
+
+  eLo.value = lo; eHi.value = hi;                       // tra so da kep ve o
+  eLo.classList.remove('dirty'); eHi.classList.remove('dirty');
+  sendCmd(curMac, { cmd:'set_limit', key:curKey, lo, hi });
+  e.target.blur();
+};
+window.toggleParamMan = () => {
+  mMan = document.getElementById('pManSw').checked;
+  if(!mMan){ mSw1=false; mSw2=false; markPending('sw1',false); markPending('sw2',false); }
+  markPending('man', mMan); refreshParamModalLive();
+  sendCmd(curMac, mMan ? { cmd:'set_manual', key:curKey, man:true } : { cmd:'set_manual', key:curKey, man:false, sw1:false, sw2:false });
+};
+window.toggleParamSw = (w) => {
+  if(!mMan) return;
+  if(w===1) mSw1 = document.getElementById('pSw1').checked;
+  else      mSw2 = document.getElementById('pSw2').checked;
+  markPending(w===1?'sw1':'sw2', w===1?mSw1:mSw2); refreshParamModalLive();
+  sendCmd(curMac, w===1 ? { cmd:'set_sw', key:curKey, sw1:mSw1 } : { cmd:'set_sw', key:curKey, sw2:mSw2 });
+};
+
+// Chart
+const RANGE_SEC  = { live: 300, hour:3600, day:86400, month:30*86400 };
+const RANGE_UNIT = { live:'minute', hour:'minute', day:'hour', month:'day' };
+let _chartTm = null;          // hẹn giờ tự làm mới cho các tab lịch sử
+
+function pruneChart(){
+  if(!pChart) return;
+  const minX = Date.now() - RANGE_SEC[curRange]*1000;
+  pChart.data.datasets[0].data = pChart.data.datasets[0].data.filter(p => p.x >= minX);
+}
+
+/* ---- Plugin vẽ 2 ĐƯỜNG NGƯỠNG (giống hệt chart trên ESP) -------------------
+   Không dùng dataset phụ vì dataset có endpoint cố định -> chart Realtime dài
+   ra thì đường ngưỡng bị cụt. Vẽ thẳng lên canvas thì nó luôn kéo hết bề ngang,
+   bất kể có bao nhiêu điểm. */
+const limitLinesPlugin = {
+  id: 'limitLines',
+  afterDatasetsDraw(chart){
+    const lim = chart.$limits;
+    if(!lim) return;
+    const { ctx, chartArea:{ left, right }, scales:{ y } } = chart;
+
+    const line = (val, color, tag) => {
+      if(val === undefined || val === null || isNaN(val)) return;
+      const py = y.getPixelForValue(val);
+      if(py < y.top - 1 || py > y.bottom + 1) return;   // ngoài khung -> bỏ
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = color;
+      ctx.moveTo(left, py);
+      ctx.lineTo(right, py);
+      ctx.stroke();
+
+      // nhãn nhỏ bám mép phải
+      ctx.setLineDash([]);
+      ctx.font = '600 10px ui-monospace, monospace';
+      const txt = `${tag} ${val}`;
+      const w = ctx.measureText(txt).width + 10;
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(right - w, py - 8, w, 16);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(txt, right - 5, py);
+      ctx.restore();
+    };
+
+    line(lim.hi, '#FF9F0A', 'Hi');   // cam = trần
+    line(lim.lo, '#64D2FF', 'Lo');   // xanh = sàn
+  }
+};
+Chart.register(limitLinesPlugin);
+
+function drawChart(pts){
+  const cvs = document.getElementById('pChart');
+  if(pChart){ pChart.destroy(); pChart=null; }
+
+  const c   = getColorHex(curKey);      // MÃ HEX THẬT, không phải var(--...)
+  const lim = currentLimits();                 // { lo, hi } của thông số đang xem
+  const dec = DEC[String(curKey).toLowerCase()] ?? 1;
+
+  // Trục Y phải CHỨA CẢ 2 NGƯỠNG, nếu không thì đường ngưỡng nằm ngoài khung và
+  // người xem tưởng "an toàn" trong khi thực ra đang trôi rất xa. Đây là lý do
+  // ảnh cũ nhìn pH 4.83–4.90 mà chẳng thấy ngưỡng 5.5 đâu.
+  const ys = pts.map(p => p.y);
+  const lo = Number(lim.lo), hi = Number(lim.hi);
+  let vmin = Math.min(...ys, isNaN(lo) ? Infinity : lo);
+  let vmax = Math.max(...ys, isNaN(hi) ? -Infinity : hi);
+  if(!isFinite(vmin) || !isFinite(vmax)){ vmin = 0; vmax = 1; }
+  const pad = Math.max((vmax - vmin) * 0.12, Math.pow(10, -dec));
+
+  // Nền chuyển sắc — đậm ở đường, tan dần xuống đáy
+  const ctx2 = cvs.getContext('2d');
+  const grad = ctx2.createLinearGradient(0, 0, 0, cvs.height || 300);
+  grad.addColorStop(0, c + '55');
+  grad.addColorStop(1, c + '00');
+
+  pChart = new Chart(cvs, {
+    type: 'line',
+    data: { datasets: [{
+      data: pts,
+      borderColor: c,
+      backgroundColor: grad,
+      fill: true,
+      borderWidth: 2.2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: c,
+      pointHoverBorderColor: '#fff',
+      pointHoverBorderWidth: 2,
+      tension: 0.35,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { right: 6, top: 8 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(20,22,28,.95)',
+          borderColor: 'rgba(255,255,255,.12)', borderWidth: 1,
+          titleColor: '#86868b', bodyColor: '#f5f5f7',
+          padding: 10, displayColors: false,
+          callbacks: {
+            label: (it) => {
+              const v = it.parsed.y;
+              const u = ((((devices.get(curMac)||{}).full||{}).params||{})[curKey]||{}).unit || '';
+              let s = `${v.toFixed(dec)} ${u}`.trim();
+              if(!isNaN(lo) && v < lo) s += '   ▼ dưới ngưỡng';
+              if(!isNaN(hi) && v > hi) s += '   ▲ trên ngưỡng';
+              return s;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { unit: RANGE_UNIT[curRange] },
+          ticks: { color: '#86868b', maxRotation: 0, autoSkipPadding: 20, font: { size: 10 } },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+        },
+        y: {
+          suggestedMin: vmin - pad,
+          suggestedMax: vmax + pad,
+          ticks: {
+            color: '#86868b', font: { size: 10 }, maxTicksLimit: 6,
+            callback: (v) => Number(v).toFixed(dec),
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          border: { display: false },
+        }
+      }
+    }
+  });
+
+  pChart.$limits = { lo: isNaN(lo) ? null : lo, hi: isNaN(hi) ? null : hi };
+}
+
+async function loadChartRange(rng){
+  curRange = rng;
+  const sts = document.getElementById('pChartStatus');
+  clearTimeout(_chartTm);
+
+  // ── Tab REALTIME: không hỏi Firebase. Vẽ khung rỗng rồi để pushHistory()
+  //    chấm điểm mỗi khi MQTT về (2.5s/lần). Cửa sổ trượt 5 phút.
+  if(rng === 'live'){
+    if(pChart){ pChart.destroy(); pChart=null; }
+    drawChart([]);
+    sts.className='chart-status show';
+    sts.innerText='Đang chờ số từ MQTT... (mỗi 2.5 giây)';
+    // có số là ẩn dòng chờ đi
+    const tick = setInterval(() => {
+      if(!pChart || curRange!=='live'){ clearInterval(tick); return; }
+      if(pChart.data.datasets[0].data.length) { sts.className='chart-status'; clearInterval(tick); }
+    }, 500);
+    return;
+  }
+
+  // ── Các tab lịch sử: đọc Firebase
+  if(pChart){ pChart.destroy(); pChart=null; }
+  if(!FB.HOST){
+    sts.className='chart-status show';
+    sts.innerText='Chưa cấu hình Firebase. Điền FB.HOST trong file HTML (và FB_HOST trong .ino).';
+    return;
+  }
+
+  sts.className='chart-status show';
+  sts.innerText='Đang đọc Firebase...';
+
+  const fromSec = Math.floor((Date.now() - RANGE_SEC[rng]*1000) / 1000);
+  const rows = await fbQuery(curMac, fromSec);
+
+  if(rows === null){
+    sts.className='chart-status show';
+    sts.innerText='Không đọc được Firebase. Kiểm tra FB.HOST + rules (.indexOn "t").';
+    return;
+  }
+
+  const pts = rows.filter(r => r[curKey] !== undefined).map(r => ({ x: r.t*1000, y: r[curKey] }));
+  if(!pts.length){
+    sts.className='chart-status show';
+    sts.innerText='Chưa có dữ liệu trong khoảng này. ESP ghi 1 dòng/phút — chờ vài phút.';
+    return;
+  }
+
+  sts.className='chart-status';
+  drawChart(pts);
+
+  // Tự làm mới mỗi 60s — trùng nhịp ESP ghi sổ, không sớm hơn (phí request).
+  _chartTm = setTimeout(() => { if(curRange === rng) loadChartRange(rng); }, 60000);
+}
+
+document.getElementById('rangeTabs').addEventListener('click', e => {
+  if(!e.target.classList.contains('segment')) return;
+  document.querySelectorAll('.segment').forEach(el=>el.classList.remove('active'));
+  e.target.classList.add('active');
+  loadChartRange(e.target.dataset.range);
+});
+
+// Init — đã có room tính sẵn (localStorage) thì vào thẳng, chưa có thì
+// đứng chờ ở màn hình gate (xem attemptChatId() ở trên). Nếu từng nhập
+// Chat ID trước đó (còn nhớ trong TGCHAT_KEY dù USERKEY_KEY đã bị xoá/lệch
+// định dạng) thì điền sẵn vào ô nhập cho đỡ gõ lại.
+if(userKey){
+  startApp();
+} else {
+  const savedChat = localStorage.getItem(CFG.TGCHAT_KEY);
+  if(savedChat) document.getElementById('userKeyInput').value = savedChat;
+  document.getElementById('loginGate').style.display = 'flex';
+}
+setInterval(render, 3000); 
+</script>
+</body>
+</html>
